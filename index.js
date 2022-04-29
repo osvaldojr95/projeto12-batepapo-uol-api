@@ -54,6 +54,22 @@ app.post("/participantes", async (req, res) => {
     }
 });
 
+app.get("/participantes", async (req, res) => {
+    try {
+        //Conexão
+        await mongoClient.connect();
+        const db = mongoClient.db("projeto12");
+        const participantesCollection = db.collection("participantes");
+
+        const participantes = await participantesCollection.find({}).toArray();
+        res.status(200).send(participantes);
+        mongoClient.close();
+    } catch (e) {
+        res.sendStatus(500);
+        mongoClient.close();
+    }
+});
+
 app.listen(5000, () => {
     console.log("Servidor online");
 });
