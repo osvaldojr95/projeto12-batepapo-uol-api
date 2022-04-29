@@ -33,7 +33,7 @@ app.post("/participantes", async (req, res) => {
         //Inserção
         const obj = { name: value.name, lastStatus: Date.now() };
         await participantesCollection.insertOne(obj);
-        await mensagensCollection.insertOne({ from: obj.name, to: "Todos", text: "entra na sala...", type: "status", time: dayjs(obj.lastStatus).format("HH:MM:SS") });
+        await mensagensCollection.insertOne({ from: obj.name, to: "Todos", text: "entra na sala...", type: "status", time: dayjs(obj.lastStatus).format("HH:mm:ss") });
         //Resposta
 
         res.sendStatus(201);
