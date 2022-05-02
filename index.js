@@ -21,20 +21,17 @@ app.post("/participantes", async (req, res) => {
     })
 
     try {
-        //Conexão
         await mongoClient.connect();
         const db = mongoClient.db("projeto12");
         const participantesCollection = db.collection("participantes");
         const mensagensCollection = db.collection("mensagens");
-        //Validação
+        
         const value = await schema.validateAsync({ name: req.body.name });
-        //Erros
         if (await participantesCollection.findOne({ name: value.name })) throw new Error("name exist");
-        //Inserção
+        
         const obj = { name: value.name, lastStatus: Date.now() };
         await participantesCollection.insertOne(obj);
         await mensagensCollection.insertOne({ from: obj.name, to: "Todos", text: "entra na sala...", type: "status", time: dayjs(obj.lastStatus).format("HH:mm:ss") });
-        //Resposta
 
         res.sendStatus(201);
         mongoClient.close();
@@ -56,7 +53,6 @@ app.post("/participantes", async (req, res) => {
 
 app.get("/participantes", async (req, res) => {
     try {
-        //Conexão
         await mongoClient.connect();
         const db = mongoClient.db("projeto12");
         const participantesCollection = db.collection("participantes");
@@ -66,6 +62,44 @@ app.get("/participantes", async (req, res) => {
         mongoClient.close();
     } catch (e) {
         res.sendStatus(500);
+        mongoClient.close();
+    }
+});
+
+app.post("/messages", async (req, res) => {
+    const { to, text, type } = req.body;
+    const { user: from } = req.headers;
+    try {
+        await mongoClient.connect();
+        const db = mongoClient.db("projeto12");
+        const participantesCollection = db.collection("participantes");
+        const mensagensCollection = db.collection("mensagens");
+        
+        let participantes = await participantesCollection.find({}).toArray();
+        participantes = participantes.map((participante) => {
+            return participante.name;
+        });
+        const schema = Joi.object({
+            to: Joi.string()
+                .alphanum()
+                .min(1)
+                .required(),
+            text: Joi.string()
+                .min(1)
+                .required(),
+            type: Joi.string()
+                .valid("message", "private_message")
+                .required(),
+            from: Joi.string()
+                .valid(...participantes)
+                .required()
+        });
+        const value = await schema.validateAsync({ to, text, type, from });
+        await mensagensCollection.insertOne({ from, to, text, type, time: dayjs(Date.now()).format("HH:mm:ss") });
+        res.sendStatus(201);
+        mongoClient.close();
+    } catch (e) {
+        res.sendStatus(e.message);
         mongoClient.close();
     }
 });
