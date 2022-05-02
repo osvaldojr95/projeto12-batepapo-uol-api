@@ -128,6 +128,31 @@ app.get("/messages", async (req, res) => {
     }
 });
 
+app.post("/status", async (req, res) => {
+    const { user } = req.headers;
+    try {
+        await mongoClient.connect();
+        const db = mongoClient.db("projeto12");
+        const participantesCollection = db.collection("participantes");
+
+        if (!await participantesCollection.findOne({ name: user })) throw new Error("participante offline");
+        await participantesCollection.updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
+
+        res.sendStatus(200);
+        mongoClient.close();
+    } catch (e) {
+        switch (e.message) {
+            default:
+                res.sendStatus(e.message);
+                break;
+            case "participante offline":
+                res.sendStatus(404);
+                break;
+        }
+        mongoClient.close();
+    }
+});
+
 app.listen(5000, () => {
     console.log("Servidor online");
 });
