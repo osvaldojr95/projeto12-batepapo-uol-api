@@ -104,6 +104,30 @@ app.post("/messages", async (req, res) => {
     }
 });
 
+app.get("/messages", async (req, res) => {
+    const limit = parseInt(req.query.limit);
+    const { user } = req.headers;
+    try {
+        await mongoClient.connect();
+        const db = mongoClient.db("projeto12");
+        const messagesCollection = db.collection("mensagens");
+
+        let messages = await messagesCollection.find({}).toArray();
+        messages = messages.filter((msg) => {
+            if (msg.to === "Todos" || msg.to === user || msg.from === user) {
+                return true;
+            }
+            return false;
+        });
+        if (limit) { messages = messages.slice(messages.length - limit) }
+        res.status(200).send(messages);
+        mongoClient.close();
+    } catch (e) {
+        res.status(500).send(e.message);
+        mongoClient.close();
+    }
+});
+
 app.listen(5000, () => {
     console.log("Servidor online");
 });
