@@ -12,7 +12,42 @@ const app = express();
 app.use(cors());
 app.use(express.json())
 
-app.post("/participantes", async (req, res) => {
+const deleteParticipante = async (participantes) => {
+    try {
+        participantes.forEach(async element => {
+            console.log(element.name);
+            await mongoClient.connect();
+            const db = mongoClient.db("projeto12");
+            const participantesCollection = db.collection("participantes");
+            await participantesCollection.deleteOne({ name: element.name });
+
+            const mensagensCollection = db.collection("mensagens");
+            await mensagensCollection.insertOne({ from: element.name, to: "Todos", text: "sai da sala...", type: "status", time: dayjs(Date.now()).format("HH:mm:ss") });
+            mongoClient.close();
+        });
+
+    } catch (e) {
+        console.log(`Erro ${e}`);
+    }
+}
+
+const remocaoAutomatica = async () => {
+    try {
+        await mongoClient.connect();
+        const db = mongoClient.db("projeto12");
+        const participantesCollection = db.collection("participantes");
+        let remover = await participantesCollection.find({}).toArray();
+        mongoClient.close();
+
+        remover = remover.filter((part) => { return (part.lastStatus < Date.now() - 10000 ? true : false) });
+        deleteParticipante(remover);
+
+    } catch (e) {
+        console.log(e.message);
+    }
+};
+
+app.post("/participants", async (req, res) => {
     const schema = Joi.object({
         name: Joi.string()
             .alphanum()
@@ -25,10 +60,10 @@ app.post("/participantes", async (req, res) => {
         const db = mongoClient.db("projeto12");
         const participantesCollection = db.collection("participantes");
         const mensagensCollection = db.collection("mensagens");
-        
+
         const value = await schema.validateAsync({ name: req.body.name });
         if (await participantesCollection.findOne({ name: value.name })) throw new Error("name exist");
-        
+
         const obj = { name: value.name, lastStatus: Date.now() };
         await participantesCollection.insertOne(obj);
         await mensagensCollection.insertOne({ from: obj.name, to: "Todos", text: "entra na sala...", type: "status", time: dayjs(obj.lastStatus).format("HH:mm:ss") });
@@ -51,7 +86,7 @@ app.post("/participantes", async (req, res) => {
     }
 });
 
-app.get("/participantes", async (req, res) => {
+app.get("/participants", async (req, res) => {
     try {
         await mongoClient.connect();
         const db = mongoClient.db("projeto12");
@@ -74,7 +109,7 @@ app.post("/messages", async (req, res) => {
         const db = mongoClient.db("projeto12");
         const participantesCollection = db.collection("participantes");
         const mensagensCollection = db.collection("mensagens");
-        
+
         let participantes = await participantesCollection.find({}).toArray();
         participantes = participantes.map((participante) => {
             return participante.name;
@@ -119,7 +154,7 @@ app.get("/messages", async (req, res) => {
             }
             return false;
         });
-        if (limit) { messages = messages.slice(messages.length - limit) }
+        if (limit) { messages = messages.slice(Math.max(messages.length - limit,0)) }
         res.status(200).send(messages);
         mongoClient.close();
     } catch (e) {
@@ -135,24 +170,24 @@ app.post("/status", async (req, res) => {
         const db = mongoClient.db("projeto12");
         const participantesCollection = db.collection("participantes");
 
-        if (!await participantesCollection.findOne({ name: user })) throw new Error("participante offline");
-        await participantesCollection.updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
+        const participanteExistente = await participantesCollection.findOne({ name: user });
+        if (!participanteExistente) {
+            res.sendStatus(404);
+            mongoClient.close();
+            return;
+        }
 
+        await participantesCollection.updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
         res.sendStatus(200);
         mongoClient.close();
     } catch (e) {
-        switch (e.message) {
-            default:
-                res.sendStatus(e.message);
-                break;
-            case "participante offline":
-                res.sendStatus(404);
-                break;
-        }
+        res.sendStatus(500);
+        console.log(e.message);
         mongoClient.close();
     }
 });
 
 app.listen(5000, () => {
     console.log("Servidor online");
+    setInterval(remocaoAutomatica, 10000);
 });
